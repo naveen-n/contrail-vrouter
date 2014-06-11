@@ -237,6 +237,8 @@ struct vr_eth {
 } __attribute__((packed));
 
 #define VLAN_ID_INVALID         0xFFFF
+#define VLAN_ID_MAX             0xFFFF
+
 struct vr_vlan_hdr {
     unsigned short vlan_tag;
     unsigned short vlan_proto;
@@ -489,6 +491,7 @@ struct vr_forwarding_md {
     int8_t fmd_ecmp_src_nh_index;
     int16_t fmd_dvrf;
     uint32_t fmd_outer_src_ip;
+    uint16_t fmd_vlan;
 };
 
 static inline void
@@ -500,6 +503,7 @@ vr_init_forwarding_md(struct vr_forwarding_md *fmd)
     fmd->fmd_label = -1;
     fmd->fmd_dvrf = -1;
     fmd->fmd_outer_src_ip = 0;
+    fmd->fmd_vlan = 4096;
     return;
 }
 
