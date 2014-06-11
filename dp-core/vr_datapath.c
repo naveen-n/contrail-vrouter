@@ -8,6 +8,8 @@
 unsigned char vr_bcast_mac[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 unsigned char vr_well_known_mac_infix[] = { 0x80, 0xc2 };
 
+extern unsigned int vr_route_flags(unsigned int, unsigned int);
+
 static inline bool
 well_known_mac(unsigned char *dmac)
 {
@@ -36,7 +38,7 @@ vr_handle_arp_request(struct vrouter *router, unsigned short vrf,
     unsigned short proto = htons(VR_ETH_PROTO_ARP);
     struct vr_eth *eth;
     struct vr_arp *arp;
-    unsigned int dpa;
+    unsigned int dpa, rt_flags;
     bool should_proxy = false;
 
     /* 
@@ -64,7 +66,13 @@ vr_handle_arp_request(struct vrouter *router, unsigned short vrf,
      * Vhost - xconnected above
      */
     if (vr_grat_arp(sarp)) {
-        if (vif->vif_type == VIF_TYPE_VIRTUAL) {
+        if (vif_is_virtual(vif)) {
+            rt_flags = vr_route_flags(vif->vif_vrf, sarp->arp_dpa);
+            if (rt_flags & VR_RT_ARP_TRAP_FLAG) {
+                vr_preset(pkt);
+                return vr_trap(pkt, vrf, AGENT_TRAP_ARP, NULL);
+            }
+
             vr_pfree(pkt, VP_DROP_GARP_FROM_VM);
             return 0;
         }
@@ -116,6 +124,7 @@ static int
 vr_handle_arp_reply(struct vrouter *router, unsigned short vrf,
         struct vr_arp *sarp, struct vr_packet *pkt)
 {
+    unsigned int rt_flags;
     struct vr_interface *vif = pkt->vp_if;
     struct vr_packet *cloned_pkt;
 
@@ -123,6 +132,15 @@ vr_handle_arp_reply(struct vrouter *router, unsigned short vrf,
         return vif_xconnect(vif, pkt);
 
     if (vif->vif_type != VIF_TYPE_PHYSICAL) {
+        if (vif->vif_type == VIF_TYPE_VIRTUAL) {
+            rt_flags = vr_route_flags(vif->vif_vrf, sarp->arp_dpa);
+            if (rt_flags & VR_RT_ARP_TRAP_FLAG) {
+                vr_preset(pkt);
+                return vr_trap(pkt, vrf, AGENT_TRAP_ARP, NULL);
+            }
+        }
+
+        /* ...else, just drop */
         vr_pfree(pkt, VP_DROP_INVALID_IF);
         return 0;
     }
